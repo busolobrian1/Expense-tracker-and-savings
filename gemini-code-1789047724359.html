@@ -1,0 +1,1609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>Ledger — Expenses, Savings & Investments</title>
+<!-- SheetJS library for generating native Excel (.xlsx) files -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --paper:#FAFAF6;
+    --paper-alt:#F1EEE5;
+    --ink:#1D2B36;
+    --ink-soft:#5B6670;
+    --line:#D8D3C7;
+    --green:#2F6F4E;
+    --red:#B84A3E;
+    --gold:#A8823C;
+    --excel-header:#E2E8F0;
+    --excel-border:#CBD5E1;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing:antialiased;
+    padding-bottom:80px;
+  }
+  .wrap{
+    max-width:760px;
+    margin:0 auto;
+    padding:28px 20px 40px;
+  }
+  header{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    margin-bottom:22px;
+    border-bottom:1px solid var(--line);
+    padding-bottom:14px;
+  }
+  h1{
+    font-family:Georgia, "Times New Roman", serif;
+    font-size:22px;
+    font-weight:400;
+    letter-spacing:0.2px;
+    margin:0;
+  }
+  .sub{
+    font-size:12px;
+    color:var(--ink-soft);
+  }
+
+  /* Summary */
+  .summary{
+    display:flex;
+    gap:24px;
+    margin-bottom:28px;
+    flex-wrap:wrap;
+  }
+  .summary .stat{flex:1;min-width:120px;}
+  .stat .label{
+    font-size:11px;
+    color:var(--ink-soft);
+    margin-bottom:4px;
+  }
+  .stat .value{
+    font-family:Georgia, serif;
+    font-size:28px;
+    font-variant-numeric:tabular-nums;
+  }
+  .stat .value.over{color:var(--red);}
+  .stat .value.under{color:var(--green);}
+
+  /* Budget row */
+  .budget-row{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-bottom:28px;
+    font-size:13px;
+    color:var(--ink-soft);
+  }
+  .budget-row input{
+    width:90px;
+    padding:4px 6px;
+    border:1px solid var(--line);
+    background:var(--paper-alt);
+    color:var(--ink);
+    border-radius:3px;
+    font-size:13px;
+    font-variant-numeric:tabular-nums;
+  }
+  .bar-track{
+    flex:1;
+    height:6px;
+    background:var(--paper-alt);
+    border-radius:3px;
+    overflow:hidden;
+  }
+  .bar-fill{
+    height:100%;
+    background:var(--green);
+    transition:width .3s ease, background .3s ease;
+  }
+  .bar-fill.over{background:var(--red);}
+  .pct-label{
+    font-size:11px;
+    color:var(--ink-soft);
+    width:32px;
+    text-align:right;
+    flex-shrink:0;
+    font-variant-numeric:tabular-nums;
+  }
+  .salary-note{
+    font-size:11.5px;
+    color:var(--ink-soft);
+    margin-top:-20px;
+    margin-bottom:28px;
+  }
+  .salary-note.over{color:var(--red);}
+
+  /* Form */
+  form.entry{
+    background:var(--paper-alt);
+    border:1px solid var(--line);
+    border-radius:6px;
+    padding:16px;
+    margin-bottom:30px;
+  }
+  .entry-row{
+    display:flex;
+    gap:10px;
+    margin-bottom:10px;
+    flex-wrap:wrap;
+  }
+  .field{
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+    flex:1;
+    min-width:110px;
+  }
+  .field label{
+    font-size:11px;
+    color:var(--ink-soft);
+  }
+  input, select{
+    font-family:inherit;
+    font-size:14px;
+    padding:8px 9px;
+    border:1px solid var(--line);
+    border-radius:4px;
+    background:var(--paper);
+    color:var(--ink);
+  }
+  input:focus, select:focus{
+    outline:2px solid var(--gold);
+    outline-offset:1px;
+  }
+  button{
+    font-family:inherit;
+    cursor:pointer;
+  }
+  .add-btn{
+    width:100%;
+    padding:10px;
+    background:var(--ink);
+    color:var(--paper);
+    border:none;
+    border-radius:4px;
+    font-size:14px;
+    letter-spacing:0.2px;
+  }
+  .add-btn:active{opacity:0.85;}
+  .form-btn-row{
+    display:flex;
+    gap:8px;
+  }
+  .cancel-btn{
+    padding:10px 16px;
+    background:none;
+    border:1px solid var(--line);
+    border-radius:4px;
+    font-size:14px;
+    color:var(--ink-soft);
+  }
+  .cancel-btn:hover{border-color:var(--ink-soft);color:var(--ink);}
+  form.entry.editing, form.investment-form.editing{
+    border-color:var(--gold);
+  }
+  .edit-banner{
+    font-size:11.5px;
+    color:var(--gold);
+    margin:-4px 0 10px;
+  }
+
+  /* Filters */
+  .filters{
+    display:flex;
+    gap:8px;
+    margin-bottom:14px;
+    align-items:center;
+  }
+  .filters select{flex:1;}
+
+  /* Ledger list */
+  .ledger{
+    border-top:1px solid var(--line);
+  }
+  .entry-item{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:10px;
+    padding:12px 0;
+    border-bottom:1px solid var(--line);
+  }
+  .entry-info{flex:1;min-width:0;}
+  .entry-desc{
+    font-size:14px;
+    margin-bottom:2px;
+    word-break:break-word;
+  }
+  .entry-meta{
+    font-size:11px;
+    color:var(--ink-soft);
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+  }
+  .tag{
+    background:var(--paper-alt);
+    border-radius:3px;
+    padding:1px 6px;
+  }
+  .entry-amount{
+    font-family:Georgia, serif;
+    font-size:15px;
+    font-variant-numeric:tabular-nums;
+    white-space:nowrap;
+    padding-top:1px;
+  }
+  .entry-actions{
+    display:flex;
+    gap:6px;
+  }
+  .icon-btn{
+    background:none;
+    border:none;
+    color:var(--ink-soft);
+    font-size:13px;
+    padding:2px 4px;
+  }
+  .icon-btn:hover{color:var(--red);}
+  .icon-btn.edit-btn:hover{color:var(--gold);}
+  .empty{
+    padding:30px 0;
+    text-align:center;
+    color:var(--ink-soft);
+    font-size:13px;
+  }
+
+  /* Breakdown */
+  .breakdown{
+    margin-top:34px;
+  }
+  .breakdown h2{
+    font-family:Georgia, serif;
+    font-weight:400;
+    font-size:16px;
+    margin:0 0 12px;
+    border-bottom:1px solid var(--line);
+    padding-bottom:8px;
+  }
+  .cat-row{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-bottom:8px;
+    font-size:12.5px;
+  }
+  .cat-name{width:90px;flex-shrink:0;color:var(--ink-soft);}
+  .cat-bar-track{
+    flex:1;
+    height:8px;
+    background:var(--paper-alt);
+    border-radius:2px;
+    overflow:hidden;
+  }
+  .cat-bar-fill{
+    height:100%;
+    background:var(--gold);
+  }
+  .cat-amt{
+    width:64px;
+    text-align:right;
+    font-variant-numeric:tabular-nums;
+    flex-shrink:0;
+  }
+
+  .toolbar{
+    display:flex;
+    gap:10px;
+    margin-top:24px;
+  }
+  .toolbar button{
+    flex:1;
+    padding:8px;
+    font-size:12px;
+    background:none;
+    border:1px solid var(--line);
+    border-radius:4px;
+    color:var(--ink-soft);
+  }
+  .toolbar button:hover{border-color:var(--ink-soft);color:var(--ink);}
+
+  @media (prefers-reduced-motion: reduce){
+    .bar-fill{transition:none;}
+  }
+
+  /* Savings & Investments */
+  .nav-tabs{
+    display:flex;
+    gap:6px;
+    margin:0 0 24px;
+    border-bottom:1px solid var(--line);
+  }
+  .nav-tab{
+    flex:1;
+    padding:10px 8px;
+    background:none;
+    border:1px solid transparent;
+    border-bottom:none;
+    color:var(--ink-soft);
+    border-radius:5px 5px 0 0;
+    font-size:13px;
+  }
+  .nav-tab.active{
+    color:var(--ink);
+    background:var(--paper-alt);
+    border-color:var(--line);
+    font-weight:600;
+  }
+  .page{display:none;}
+  .page.active{display:block;}
+  .investment-summary{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:12px;
+    margin-bottom:24px;
+  }
+  .investment-card{
+    border:1px solid var(--line);
+    background:var(--paper-alt);
+    border-radius:6px;
+    padding:12px;
+  }
+  .investment-card .label{
+    font-size:10px;
+    color:var(--ink-soft);
+    margin-bottom:5px;
+  }
+  .investment-card .value{
+    font-family:Georgia,serif;
+    font-size:20px;
+    font-variant-numeric:tabular-nums;
+  }
+  .investment-form{
+    background:var(--paper-alt);
+    border:1px solid var(--line);
+    border-radius:6px;
+    padding:16px;
+    margin-bottom:24px;
+  }
+  .investment-form h2,.investment-section h2{
+    font-family:Georgia,serif;
+    font-weight:400;
+    font-size:16px;
+    margin:0 0 12px;
+  }
+  .investment-row{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-bottom:10px;
+  }
+  .investment-row .field{min-width:130px;}
+  .investment-progress{
+    margin:16px 0 22px;
+    border-top:1px solid var(--line);
+    padding-top:16px;
+  }
+  .progress-head{
+    display:flex;
+    justify-content:space-between;
+    gap:10px;
+    font-size:12px;
+    margin-bottom:7px;
+  }
+  .progress-track{
+    height:10px;
+    background:var(--paper-alt);
+    border:1px solid var(--line);
+    border-radius:6px;
+    overflow:hidden;
+  }
+  .progress-fill{
+    height:100%;
+    background:var(--green);
+    width:0;
+    transition:width .3s ease;
+  }
+  .projection-grid{
+    display:grid;
+    grid-template-columns:repeat(2,1fr);
+    gap:8px;
+    margin-top:12px;
+  }
+  .projection-item{
+    padding:9px;
+    border:1px solid var(--line);
+    background:var(--paper);
+    border-radius:4px;
+  }
+  .projection-item .small{
+    display:block;
+    font-size:10px;
+    color:var(--ink-soft);
+    margin-bottom:3px;
+  }
+  .projection-item strong{
+    font-size:14px;
+    font-variant-numeric:tabular-nums;
+  }
+  .investment-list{
+    border-top:1px solid var(--line);
+  }
+  .investment-item{
+    padding:13px 0;
+    border-bottom:1px solid var(--line);
+  }
+  .investment-item-top{
+    display:flex;
+    justify-content:space-between;
+    gap:10px;
+  }
+  .investment-name{font-size:14px;font-weight:600;}
+  .investment-amount{
+    font-family:Georgia,serif;
+    font-size:15px;
+    white-space:nowrap;
+  }
+  .investment-meta{
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px;
+    margin-top:4px;
+    font-size:11px;
+    color:var(--ink-soft);
+  }
+  .investment-actions{
+    display:flex;
+    justify-content:flex-end;
+    gap:8px;
+    margin-top:7px;
+  }
+  .rate-note{
+    font-size:11px;
+    color:var(--ink-soft);
+    margin-top:8px;
+  }
+
+  /* Sub-transactions UI */
+  .tx-box {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 8px 10px;
+    margin-top: 10px;
+  }
+  .tx-box-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--ink-soft);
+    margin-bottom: 6px;
+  }
+  .tx-form {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+  }
+  .tx-form input, .tx-form select {
+    padding: 4px 6px;
+    font-size: 12px;
+  }
+  .tx-form button {
+    padding: 4px 8px;
+    font-size: 11px;
+    background: var(--ink);
+    color: var(--paper);
+    border: none;
+    border-radius: 3px;
+  }
+  .tx-history {
+    font-size: 11px;
+    color: var(--ink-soft);
+    border-top: 1px dashed var(--line);
+    padding-top: 6px;
+  }
+  .tx-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 2px 0;
+  }
+
+  /* Interactive Daily Interest Accrual Table Section */
+  .accrual-section {
+    margin-top: 36px;
+    border-top: 2px dashed var(--line);
+    padding-top: 20px;
+  }
+  .accrual-header-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .accrual-table-container {
+    overflow-x: auto;
+    border: 1px solid var(--excel-border);
+    border-radius: 4px;
+    background: #FFFFFF;
+    max-height: 380px;
+    overflow-y: auto;
+  }
+  .accrual-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+  }
+  .accrual-table th {
+    background: var(--excel-header);
+    color: var(--ink);
+    border: 1px solid var(--excel-border);
+    padding: 6px 8px;
+    text-align: right;
+    font-weight: 600;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+  .accrual-table th:first-child, .accrual-table td:first-child {
+    text-align: center;
+  }
+  .accrual-table td {
+    border: 1px solid var(--excel-border);
+    padding: 4px 6px;
+    text-align: right;
+    white-space: nowrap;
+    color: #1E293B;
+  }
+  .accrual-table tr:nth-child(even) {
+    background: #F8FAFC;
+  }
+  .accrual-table tr.highlight-tx {
+    background: #FEF3C7;
+  }
+  .accrual-table tr.total-row {
+    background: #E2E8F0;
+    font-weight: bold;
+    position: sticky;
+    bottom: 0;
+  }
+
+  @media(max-width:520px){
+    .investment-summary{grid-template-columns:1fr;}
+    .projection-grid{grid-template-columns:1fr;}
+  }
+
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="nav-tabs">
+    <button class="nav-tab active" data-page="expensesPage">Expenses</button>
+    <button class="nav-tab" data-page="savingsPage">Savings & Investments</button>
+  </div>
+
+  <section class="page active" id="expensesPage">
+  <header>
+    <h1>Ledger</h1>
+    <div class="sub" id="monthLabel"></div>
+  </header>
+
+  <div class="summary">
+    <div class="stat">
+      <div class="label">Spent this month</div>
+      <div class="value" id="monthTotal">KSh 0</div>
+    </div>
+    <div class="stat">
+      <div class="label">Left until payday</div>
+      <div class="value" id="remainingVal">—</div>
+    </div>
+    <div class="stat">
+      <div class="label">Saved so far</div>
+      <div class="value" id="savedVal">—</div>
+    </div>
+  </div>
+
+  <div class="budget-row">
+    <span>Salary</span>
+    <input type="number" id="budgetInput" placeholder="e.g. 60000" min="0" step="1">
+    <div class="bar-track"><div class="bar-fill" id="budgetBar" style="width:0%"></div></div>
+    <span id="budgetPct" class="pct-label">0%</span>
+  </div>
+  <div class="salary-note" id="salaryNote"></div>
+
+  <form class="entry" id="entryForm">
+    <div class="edit-banner" id="editBanner" hidden>Editing an existing expense</div>
+    <div class="entry-row">
+      <div class="field">
+        <label for="descInput">Description</label>
+        <input type="text" id="descInput" placeholder="Coffee, rent, groceries…" required>
+      </div>
+      <div class="field" style="max-width:110px;">
+        <label for="amountInput">Amount</label>
+        <input type="number" id="amountInput" placeholder="0.00" min="0" step="0.01" required>
+      </div>
+    </div>
+    <div class="entry-row">
+      <div class="field">
+        <label for="categoryInput">Category</label>
+        <select id="categoryInput">
+          <option>Food</option>
+          <option>Transport</option>
+          <option>Housing</option>
+          <option>Utilities</option>
+          <option>Health</option>
+          <option>Entertainment</option>
+          <option>Shopping</option>
+          <option>Other</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="dateInput">Date</label>
+        <input type="date" id="dateInput" required>
+      </div>
+    </div>
+    <div class="form-btn-row">
+      <button type="submit" class="add-btn" id="submitBtn">Add expense</button>
+      <button type="button" class="cancel-btn" id="cancelEditBtn" hidden>Cancel</button>
+    </div>
+  </form>
+
+  <div class="filters">
+    <select id="filterMonth"></select>
+    <select id="filterCategory">
+      <option value="">All categories</option>
+    </select>
+  </div>
+
+  <div class="ledger" id="ledgerList"></div>
+
+  <div class="breakdown">
+    <h2>By category</h2>
+    <div id="catBreakdown"></div>
+  </div>
+
+  <div class="toolbar">
+    <button id="exportBtn">Export CSV</button>
+    <button id="clearBtn">Clear all data</button>
+  </div>
+  </section>
+
+  <section class="page" id="savingsPage">
+    <header>
+      <h1>Savings & Investments</h1>
+      <div class="sub">Track growth and compound returns</div>
+    </header>
+
+    <div class="investment-summary">
+      <div class="investment-card">
+        <div class="label">Total principal</div>
+        <div class="value" id="invPrincipal">KSh 0</div>
+      </div>
+      <div class="investment-card">
+        <div class="label">Current value + Net Interest</div>
+        <div class="value" id="invValue">KSh 0</div>
+      </div>
+      <div class="investment-card">
+        <div class="label">Net interest earned</div>
+        <div class="value" id="invInterest">KSh 0</div>
+      </div>
+    </div>
+
+    <form class="investment-form" id="investmentForm">
+      <div class="edit-banner" id="invEditBanner" hidden>Editing an investment</div>
+      <h2 id="invFormTitle">Add savings / investment</h2>
+      <div class="investment-row">
+        <div class="field">
+          <label for="investmentName">Investment name</label>
+          <input id="investmentName" type="text" placeholder="e.g. MMF, SACCO, bank deposit" required>
+        </div>
+        <div class="field">
+          <label for="investmentAmount">Starting amount (KSh)</label>
+          <input id="investmentAmount" type="number" min="0" step="0.01" placeholder="10000" required>
+        </div>
+      </div>
+
+      <div class="investment-row">
+        <div class="field">
+          <label for="investmentRate">Annual interest rate (%)</label>
+          <input id="investmentRate" type="number" min="0" step="0.01" placeholder="10" required>
+        </div>
+        <div class="field">
+          <label for="startDate">Start / Deposit Date</label>
+          <input id="startDate" type="date" required>
+        </div>
+      </div>
+
+      <div class="investment-row">
+        <div class="field">
+          <label for="investmentProvider">Where invested</label>
+          <select id="investmentProvider">
+            <option>Bank / Fixed Deposit</option>
+            <option>Money Market Fund (MMF)</option>
+            <option>SACCO</option>
+            <option>Government Securities / T-Bills</option>
+            <option>Government Bonds</option>
+            <option>Sanlam Allianz</option>
+            <option>Etica</option>
+            <option>Arvocap</option>
+            <option>Arvocap Thamani</option>
+            <option>Kuza Special Fund</option>
+            <option>Etica Special Fund</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div class="field" id="otherProviderField" style="display:none;">
+          <label for="otherProvider">Other provider / product</label>
+          <input id="otherProvider" type="text" placeholder="Enter name">
+        </div>
+        <div class="field">
+          <label for="investmentGoal">Target amount (KSh, optional)</label>
+          <input id="investmentGoal" type="number" min="0" step="0.01" placeholder="50000">
+        </div>
+      </div>
+
+      <div class="form-btn-row">
+        <button type="submit" class="add-btn" id="invSubmitBtn">Add investment</button>
+        <button type="button" class="cancel-btn" id="invCancelEditBtn" hidden>Cancel</button>
+      </div>
+      <div class="rate-note">Rate is treated as an annual nominal rate. Etica investments automatically deduct 15% withholding tax and 2% annual management fee on accrued interest.</div>
+    </form>
+
+    <div class="investment-section">
+      <h2>Growth progress</h2>
+      <div class="investment-progress">
+        <div class="progress-head">
+          <span id="progressLabel">Projected growth</span>
+          <strong id="progressPct">0%</strong>
+        </div>
+        <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+        <div class="projection-grid">
+          <div class="projection-item"><span class="small">Total balance</span><strong id="progressPrincipal">KSh 0</strong></div>
+          <div class="projection-item"><span class="small">Current value</span><strong id="progressValue">KSh 0</strong></div>
+          <div class="projection-item"><span class="small">Net interest earned</span><strong id="progressInterest">KSh 0</strong></div>
+          <div class="projection-item"><span class="small">Overall return</span><strong id="progressGrowth">0%</strong></div>
+        </div>
+      </div>
+
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <h2>Your investments</h2>
+        <button id="exportExcelBtn" style="padding:6px 12px; font-size:12px; border:1px solid var(--line); background:var(--paper); border-radius:4px;">Export Excel (.xlsx)</button>
+      </div>
+      <div class="investment-list" id="investmentList"></div>
+    </div>
+
+    <!-- Daily Interest Accrual Table Interface -->
+    <div class="accrual-section">
+      <div class="accrual-header-controls">
+        <h2 style="font-family:Georgia,serif; font-weight:400; font-size:16px; margin:0;">Daily Interest Accrual Schedule</h2>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <label for="accrualSelectInv" style="font-size:12px; color:var(--ink-soft);">Select Investment:</label>
+          <select id="accrualSelectInv" style="padding:4px 8px; font-size:12px;"></select>
+        </div>
+      </div>
+      <div class="accrual-table-container">
+        <table class="accrual-table">
+          <thead>
+            <tr>
+              <th>Day</th>
+              <th>Date</th>
+              <th>Opening Bal</th>
+              <th>Deposit / Withdraw</th>
+              <th>Closing Principal</th>
+              <th>Gross Daily Interest</th>
+              <th>Tax (15%)</th>
+              <th>Fee (2%)</th>
+              <th>Net Daily Interest</th>
+              <th>Accum. Total Value</th>
+            </tr>
+          </thead>
+          <tbody id="accrualTableBody">
+            <!-- Dynamic rows populated via JavaScript -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+(function(){
+  const STORAGE_KEY = 'ledger_expenses_v1';
+  const BUDGET_KEY = 'ledger_budget_v1';
+  const CATEGORIES = ["Food","Transport","Housing","Utilities","Health","Entertainment","Shopping","Other"];
+
+  let expenses = [];
+  try {
+    expenses = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+  } catch(e){ expenses = []; }
+
+  let editingId = null;
+
+  const els = {
+    form: document.getElementById('entryForm'),
+    desc: document.getElementById('descInput'),
+    amount: document.getElementById('amountInput'),
+    category: document.getElementById('categoryInput'),
+    date: document.getElementById('dateInput'),
+    submitBtn: document.getElementById('submitBtn'),
+    cancelEditBtn: document.getElementById('cancelEditBtn'),
+    editBanner: document.getElementById('editBanner'),
+    monthTotal: document.getElementById('monthTotal'),
+    remaining: document.getElementById('remainingVal'),
+    saved: document.getElementById('savedVal'),
+    budgetInput: document.getElementById('budgetInput'),
+    budgetBar: document.getElementById('budgetBar'),
+    budgetPct: document.getElementById('budgetPct'),
+    salaryNote: document.getElementById('salaryNote'),
+    ledgerList: document.getElementById('ledgerList'),
+    catBreakdown: document.getElementById('catBreakdown'),
+    filterMonth: document.getElementById('filterMonth'),
+    filterCategory: document.getElementById('filterCategory'),
+    monthLabel: document.getElementById('monthLabel'),
+    exportBtn: document.getElementById('exportBtn'),
+    clearBtn: document.getElementById('clearBtn'),
+  };
+
+  const today = new Date();
+  els.date.value = today.toISOString().slice(0,10);
+  els.monthLabel.textContent = today.toLocaleString(undefined,{month:'long', year:'numeric'});
+
+  CATEGORIES.forEach(c=>{
+    const o = document.createElement('option');
+    o.value = c; o.textContent = c;
+    els.filterCategory.appendChild(o);
+  });
+
+  const savedBudget = localStorage.getItem(BUDGET_KEY);
+  if(savedBudget) els.budgetInput.value = savedBudget;
+
+  function fmt(n){
+    const rounded = Math.round(Number(n) * 100) / 100;
+    const hasCents = Math.abs(rounded % 1) > 0.001;
+    return 'KSh ' + rounded.toLocaleString(undefined, hasCents
+      ? {minimumFractionDigits:2, maximumFractionDigits:2}
+      : {minimumFractionDigits:0, maximumFractionDigits:0});
+  }
+
+  function monthKey(dateStr){
+    return dateStr.slice(0,7);
+  }
+
+  function save(){
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(expenses));
+  }
+
+  function populateMonthFilter(){
+    const months = Array.from(new Set(expenses.map(e=>monthKey(e.date)))).sort().reverse();
+    const currentKey = monthKey(today.toISOString().slice(0,10));
+    if(!months.includes(currentKey)) months.unshift(currentKey);
+    const prevVal = els.filterMonth.value;
+    els.filterMonth.innerHTML = '';
+    months.forEach(m=>{
+      const o = document.createElement('option');
+      o.value = m;
+      const d = new Date(m + '-01T00:00:00');
+      o.textContent = d.toLocaleString(undefined,{month:'long', year:'numeric'});
+      els.filterMonth.appendChild(o);
+    });
+    els.filterMonth.value = months.includes(prevVal) ? prevVal : currentKey;
+  }
+
+  function render(){
+    populateMonthFilter();
+    const selectedMonth = els.filterMonth.value;
+    const selectedCat = els.filterCategory.value;
+
+    const monthExpenses = expenses.filter(e=>monthKey(e.date) === selectedMonth);
+    const filtered = monthExpenses.filter(e=> !selectedCat || e.category === selectedCat)
+                                   .sort((a,b)=> b.date.localeCompare(a.date) || b.id - a.id);
+
+    const monthSum = monthExpenses.reduce((s,e)=>s+e.amount,0);
+    els.monthTotal.textContent = fmt(monthSum);
+
+    const salary = parseFloat(els.budgetInput.value) || 0;
+    if(salary > 0){
+      const remaining = salary - monthSum;
+      const pctRaw = (monthSum/salary)*100;
+      const pct = Math.min(100, pctRaw);
+
+      els.remaining.textContent = fmt(Math.abs(remaining));
+      els.remaining.className = 'value ' + (remaining < 0 ? 'over' : 'under');
+
+      els.saved.textContent = fmt(Math.max(0, remaining));
+      els.saved.className = 'value ' + (remaining >= 0 ? 'under' : 'over');
+
+      els.budgetBar.style.width = pct + '%';
+      els.budgetBar.className = 'bar-fill' + (monthSum > salary ? ' over' : '');
+      els.budgetPct.textContent = Math.round(pctRaw) + '%';
+
+      if(remaining < 0){
+        els.salaryNote.textContent = `You've gone ${fmt(Math.abs(remaining))} over your salary this month.`;
+        els.salaryNote.className = 'salary-note over';
+      } else {
+        els.salaryNote.textContent = `${Math.round(pctRaw)}% of your salary spent so far this month.`;
+        els.salaryNote.className = 'salary-note';
+      }
+    } else {
+      els.remaining.textContent = '—';
+      els.remaining.className = 'value';
+      els.saved.textContent = '—';
+      els.saved.className = 'value';
+      els.budgetBar.style.width = '0%';
+      els.budgetBar.className = 'bar-fill';
+      els.budgetPct.textContent = '0%';
+      els.salaryNote.textContent = 'Enter your monthly salary above to track spending against it.';
+      els.salaryNote.className = 'salary-note';
+    }
+
+    els.ledgerList.innerHTML = '';
+    if(filtered.length === 0){
+      const div = document.createElement('div');
+      div.className = 'empty';
+      div.textContent = 'No expenses recorded here yet.';
+      els.ledgerList.appendChild(div);
+    } else {
+      filtered.forEach(e=>{
+        const item = document.createElement('div');
+        item.className = 'entry-item';
+        const d = new Date(e.date + 'T00:00:00');
+        item.innerHTML = `
+          <div class="entry-info">
+            <div class="entry-desc">${escapeHtml(e.description)}</div>
+            <div class="entry-meta">
+              <span class="tag">${escapeHtml(e.category)}</span>
+              <span>${d.toLocaleDateString(undefined,{month:'short', day:'numeric'})}</span>
+            </div>
+          </div>
+          <div class="entry-amount">${fmt(e.amount)}</div>
+          <div class="entry-actions">
+            <button class="icon-btn edit-btn" data-id="${e.id}" title="Edit">✎</button>
+            <button class="icon-btn" data-id="${e.id}" data-action="delete" title="Delete">✕</button>
+          </div>
+        `;
+        els.ledgerList.appendChild(item);
+      });
+    }
+
+    els.catBreakdown.innerHTML = '';
+    const byCat = {};
+    monthExpenses.forEach(e=>{ byCat[e.category] = (byCat[e.category]||0) + e.amount; });
+    const maxCat = Math.max(1, ...Object.values(byCat));
+    const sortedCats = Object.entries(byCat).sort((a,b)=>b[1]-a[1]);
+    if(sortedCats.length === 0){
+      els.catBreakdown.innerHTML = '<div class="empty">Nothing to break down yet.</div>';
+    } else {
+      sortedCats.forEach(([cat, amt])=>{
+        const row = document.createElement('div');
+        row.className = 'cat-row';
+        row.innerHTML = `
+          <div class="cat-name">${escapeHtml(cat)}</div>
+          <div class="cat-bar-track"><div class="cat-bar-fill" style="width:${(amt/maxCat*100)}%"></div></div>
+          <div class="cat-amt">${fmt(amt)}</div>
+        `;
+        els.catBreakdown.appendChild(row);
+      });
+    }
+  }
+
+  function escapeHtml(str){
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+  }
+
+  function enterEditMode(entry){
+    editingId = entry.id;
+    els.desc.value = entry.description;
+    els.amount.value = entry.amount;
+    els.category.value = entry.category;
+    els.date.value = entry.date;
+    els.submitBtn.textContent = 'Save changes';
+    els.cancelEditBtn.hidden = false;
+    els.editBanner.hidden = false;
+    els.form.classList.add('editing');
+    els.form.scrollIntoView({behavior:'smooth', block:'start'});
+    els.desc.focus();
+  }
+
+  function exitEditMode(){
+    editingId = null;
+    els.form.reset();
+    els.date.value = today.toISOString().slice(0,10);
+    els.submitBtn.textContent = 'Add expense';
+    els.cancelEditBtn.hidden = true;
+    els.editBanner.hidden = true;
+    els.form.classList.remove('editing');
+  }
+
+  els.form.addEventListener('submit', function(ev){
+    ev.preventDefault();
+    const desc = els.desc.value.trim();
+    const amount = parseFloat(els.amount.value);
+    if(!desc || isNaN(amount)) return;
+
+    if(editingId !== null){
+      const idx = expenses.findIndex(e=>e.id === editingId);
+      if(idx !== -1){
+        expenses[idx] = {
+          ...expenses[idx],
+          description: desc,
+          amount: amount,
+          category: els.category.value,
+          date: els.date.value
+        };
+      }
+      save();
+      exitEditMode();
+      render();
+      return;
+    }
+
+    const entry = {
+      id: Date.now(),
+      description: desc,
+      amount: amount,
+      category: els.category.value,
+      date: els.date.value
+    };
+    expenses.push(entry);
+    save();
+    els.desc.value = '';
+    els.amount.value = '';
+    els.desc.focus();
+    render();
+  });
+
+  els.cancelEditBtn.addEventListener('click', function(){
+    exitEditMode();
+  });
+
+  els.ledgerList.addEventListener('click', function(ev){
+    const btn = ev.target.closest('.icon-btn');
+    if(!btn) return;
+    const id = Number(btn.dataset.id);
+
+    if(btn.classList.contains('edit-btn')){
+      const entry = expenses.find(e=>e.id === id);
+      if(entry) enterEditMode(entry);
+      return;
+    }
+
+    if(editingId === id) exitEditMode();
+    expenses = expenses.filter(e=>e.id !== id);
+    save();
+    render();
+  });
+
+  els.budgetInput.addEventListener('input', function(){
+    localStorage.setItem(BUDGET_KEY, els.budgetInput.value);
+    render();
+  });
+
+  els.filterMonth.addEventListener('change', render);
+  els.filterCategory.addEventListener('change', render);
+
+  els.exportBtn.addEventListener('click', function(){
+    if(expenses.length === 0){ alert('No expenses to export yet.'); return; }
+    let csv = 'Date,Category,Description,Amount\n';
+    expenses.sort((a,b)=>a.date.localeCompare(b.date)).forEach(e=>{
+      csv += `${e.date},${e.category},"${e.description.replace(/"/g,'""')}",${e.amount}\n`;
+    });
+    const blob = new Blob([csv], {type:'text/csv'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'expenses.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+
+  els.clearBtn.addEventListener('click', function(){
+    if(confirm('This will permanently delete all recorded expenses on this device. Continue?')){
+      expenses = [];
+      save();
+      render();
+    }
+  });
+
+  // Savings / investment tracker with daily interest calculation & deductions
+  const INVESTMENTS_KEY = 'ledger_investments_v2';
+  let investments = [];
+  try {
+    investments = JSON.parse(localStorage.getItem(INVESTMENTS_KEY)) || [];
+  } catch(e) { investments = []; }
+
+  let editingInvId = null;
+
+  const invEls = {
+    form: document.getElementById('investmentForm'),
+    title: document.getElementById('invFormTitle'),
+    name: document.getElementById('investmentName'),
+    amount: document.getElementById('investmentAmount'),
+    rate: document.getElementById('investmentRate'),
+    startDate: document.getElementById('startDate'),
+    provider: document.getElementById('investmentProvider'),
+    otherProvider: document.getElementById('otherProvider'),
+    otherProviderField: document.getElementById('otherProviderField'),
+    goal: document.getElementById('investmentGoal'),
+    submitBtn: document.getElementById('invSubmitBtn'),
+    cancelBtn: document.getElementById('invCancelEditBtn'),
+    banner: document.getElementById('invEditBanner'),
+    principal: document.getElementById('invPrincipal'),
+    value: document.getElementById('invValue'),
+    interest: document.getElementById('invInterest'),
+    list: document.getElementById('investmentList'),
+    progressLabel: document.getElementById('progressLabel'),
+    progressPct: document.getElementById('progressPct'),
+    progressFill: document.getElementById('progressFill'),
+    progressPrincipal: document.getElementById('progressPrincipal'),
+    progressValue: document.getElementById('progressValue'),
+    progressInterest: document.getElementById('progressInterest'),
+    progressGrowth: document.getElementById('progressGrowth'),
+    exportExcelBtn: document.getElementById('exportExcelBtn'),
+    accrualSelectInv: document.getElementById('accrualSelectInv'),
+    accrualTableBody: document.getElementById('accrualTableBody')
+  };
+
+  invEls.startDate.value = today.toISOString().slice(0,10);
+
+  function saveInvestments(){
+    localStorage.setItem(INVESTMENTS_KEY, JSON.stringify(investments));
+  }
+
+  function calcInvestmentDailyInterest(inv) {
+    const dailyRate = (Number(inv.rate) || 0) / 100 / 365;
+    const txs = (inv.transactions || []).slice().sort((a,b) => a.date.localeCompare(b.date));
+    
+    const startEvent = { date: inv.startDate, type: 'deposit', amount: Number(inv.amount) || 0 };
+    const allEvents = [startEvent, ...txs].sort((a,b) => a.date.localeCompare(b.date));
+
+    let currentBalance = 0;
+    let grossInterest = 0;
+    let lastDate = null;
+
+    const todayStr = new Date().toISOString().slice(0,10);
+
+    allEvents.forEach(evt => {
+      const evtDate = evt.date;
+      if (lastDate && evtDate > lastDate) {
+        const d1 = new Date(lastDate + 'T00:00:00');
+        const d2 = new Date(evtDate + 'T00:00:00');
+        const days = Math.max(0, Math.round((d2 - d1) / (1000 * 60 * 60 * 24)));
+        grossInterest += currentBalance * dailyRate * days;
+      }
+      
+      if (evt.type === 'deposit') {
+        currentBalance += Number(evt.amount);
+      } else if (evt.type === 'withdraw') {
+        currentBalance -= Number(evt.amount);
+      }
+      lastDate = evtDate;
+    });
+
+    if (lastDate && todayStr > lastDate) {
+      const d1 = new Date(lastDate + 'T00:00:00');
+      const d2 = new Date(todayStr + 'T00:00:00');
+      const days = Math.max(0, Math.round((d2 - d1) / (1000 * 60 * 60 * 24)));
+      grossInterest += currentBalance * dailyRate * days;
+    }
+
+    const providerStr = (inv.provider || '').toLowerCase();
+    const isEtica = providerStr.includes('etica');
+
+    let withholdingTax = 0;
+    let mgmtFee = 0;
+
+    if (isEtica) {
+      withholdingTax = grossInterest * 0.15;
+      mgmtFee = grossInterest * 0.02;
+    }
+
+    const netInterest = Math.max(0, grossInterest - withholdingTax - mgmtFee);
+
+    return {
+      balance: Math.max(0, currentBalance),
+      grossInterest: Math.max(0, grossInterest),
+      withholdingTax,
+      mgmtFee,
+      netInterest,
+      totalValue: Math.max(0, currentBalance + netInterest)
+    };
+  }
+
+  // Renders day-by-day Daily Accrual Schedule Table
+  function renderDailyAccrualTable() {
+    const selectedId = Number(invEls.accrualSelectInv.value);
+    const inv = investments.find(i => i.id === selectedId);
+
+    invEls.accrualTableBody.innerHTML = '';
+
+    if (!inv) {
+      invEls.accrualTableBody.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:16px; color:var(--ink-soft);">Select an investment above to view its daily accrual schedule.</td></tr>';
+      return;
+    }
+
+    const startDate = new Date((inv.startDate || today.toISOString().slice(0,10)) + 'T00:00:00');
+    const endDate = new Date();
+    if (endDate < startDate) endDate.setTime(startDate.getTime());
+
+    const isEtica = (inv.provider || '').toLowerCase().includes('etica');
+    const dailyRate = (Number(inv.rate) || 0) / 100 / 365;
+
+    let currentBalance = 0;
+    let accumGrossInterest = 0;
+    let accumTax = 0;
+    let accumFee = 0;
+    let accumNetInterest = 0;
+
+    const txMap = {};
+    (inv.transactions || []).forEach(t => {
+      if (!txMap[t.date]) txMap[t.date] = 0;
+      if (t.type === 'deposit') txMap[t.date] += Number(t.amount);
+      if (t.type === 'withdraw') txMap[t.date] -= Number(t.amount);
+    });
+
+    let dayCounter = 1;
+    let curr = new Date(startDate.getTime());
+
+    while (curr <= endDate) {
+      const dateStr = curr.toISOString().slice(0,10);
+      let txVal = 0;
+
+      if (dateStr === inv.startDate) {
+        txVal = Number(inv.amount) || 0;
+      } else if (txMap[dateStr]) {
+        txVal = txMap[dateStr];
+      }
+
+      const openingBal = currentBalance;
+      currentBalance = openingBal + txVal;
+
+      const dailyGross = currentBalance * dailyRate;
+      const dailyTax = isEtica ? dailyGross * 0.15 : 0;
+      const dailyFee = isEtica ? dailyGross * 0.02 : 0;
+      const dailyNet = dailyGross - dailyTax - dailyFee;
+
+      accumGrossInterest += dailyGross;
+      accumTax += dailyTax;
+      accumFee += dailyFee;
+      accumNetInterest += dailyNet;
+
+      const totalVal = currentBalance + accumNetInterest;
+
+      const row = document.createElement('tr');
+      if (txVal !== 0 && dateStr !== inv.startDate) row.classList.add('highlight-tx');
+
+      row.innerHTML = `
+        <td>${dayCounter}</td>
+        <td>${dateStr}</td>
+        <td>${openingBal.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+        <td style="color:${txVal > 0 ? 'green' : (txVal < 0 ? 'red' : 'inherit')};">${txVal !== 0 ? (txVal > 0 ? '+' : '') + txVal.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2}) : '-'}</td>
+        <td>${currentBalance.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+        <td>${dailyGross.toFixed(2)}</td>
+        <td>${dailyTax > 0 ? '-' + dailyTax.toFixed(2) : '0.00'}</td>
+        <td>${dailyFee > 0 ? '-' + dailyFee.toFixed(2) : '0.00'}</td>
+        <td style="font-weight:600;">${dailyNet.toFixed(2)}</td>
+        <td style="font-weight:600;">${totalVal.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+      `;
+
+      invEls.accrualTableBody.appendChild(row);
+
+      curr.setDate(curr.getDate() + 1);
+      dayCounter++;
+    }
+
+    // Totals Row
+    const totalRow = document.createElement('tr');
+    totalRow.className = 'total-row';
+    totalRow.innerHTML = `
+      <td colspan="4" style="text-align:right;">Totals:</td>
+      <td>${currentBalance.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+      <td>${accumGrossInterest.toFixed(2)}</td>
+      <td>-${accumTax.toFixed(2)}</td>
+      <td>-${accumFee.toFixed(2)}</td>
+      <td>${accumNetInterest.toFixed(2)}</td>
+      <td>${(currentBalance + accumNetInterest).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+    `;
+    invEls.accrualTableBody.appendChild(totalRow);
+  }
+
+  function renderInvestments(){
+    let totalPrincipal = 0;
+    let totalValue = 0;
+    let totalNetInterest = 0;
+
+    investments.forEach(i => {
+      const calc = calcInvestmentDailyInterest(i);
+      totalPrincipal += calc.balance;
+      totalValue += calc.totalValue;
+      totalNetInterest += calc.netInterest;
+    });
+
+    invEls.principal.textContent = fmt(totalPrincipal);
+    invEls.value.textContent = fmt(totalValue);
+    invEls.interest.textContent = fmt(totalNetInterest);
+
+    const totalGoal = investments.reduce((s,i)=>s + Number(i.goal || 0), 0);
+    let pct, label;
+    if(totalGoal > 0){
+      pct = Math.min(100, (totalValue / totalGoal) * 100);
+      label = `Progress toward target (${fmt(totalGoal)})`;
+    } else if(totalPrincipal > 0){
+      pct = Math.min(100, (totalValue / (totalPrincipal * 2)) * 100);
+      label = 'Growth progress (100% = 2× balance)';
+    } else {
+      pct = 0;
+      label = 'Projected growth';
+    }
+
+    invEls.progressLabel.textContent = label;
+    invEls.progressPct.textContent = Math.round(pct) + '%';
+    invEls.progressFill.style.width = pct + '%';
+    invEls.progressPrincipal.textContent = fmt(totalPrincipal);
+    invEls.progressValue.textContent = fmt(totalValue);
+    invEls.progressInterest.textContent = fmt(totalNetInterest);
+    invEls.progressGrowth.textContent = totalPrincipal > 0
+      ? ((totalNetInterest / totalPrincipal) * 100).toFixed(2) + '%'
+      : '0%';
+
+    // Populate Accrual Table Selector
+    const prevAccrualSel = invEls.accrualSelectInv.value;
+    invEls.accrualSelectInv.innerHTML = '';
+    investments.forEach(i => {
+      const opt = document.createElement('option');
+      opt.value = i.id;
+      opt.textContent = `${i.name} (${i.provider})`;
+      invEls.accrualSelectInv.appendChild(opt);
+    });
+    if (prevAccrualSel && investments.some(i => i.id == prevAccrualSel)) {
+      invEls.accrualSelectInv.value = prevAccrualSel;
+    }
+
+    invEls.list.innerHTML = '';
+    if(investments.length === 0){
+      invEls.list.innerHTML = '<div class="empty">No savings or investments recorded yet.</div>';
+      renderDailyAccrualTable();
+      return;
+    }
+
+    investments.slice().reverse().forEach(i=>{
+      const calc = calcInvestmentDailyInterest(i);
+      const provider = i.provider === 'Other' && i.otherProvider ? i.otherProvider : i.provider;
+      const isEtica = (i.provider || '').toLowerCase().includes('etica');
+      const item = document.createElement('div');
+      item.className = 'investment-item';
+      
+      const txHistory = (i.transactions || []).map(t => 
+        `<div class="tx-row"><span>${t.date} — ${t.type.toUpperCase()}</span><span>${fmt(t.amount)}</span></div>`
+      ).join('');
+
+      item.innerHTML = `
+        <div class="investment-item-top">
+          <div>
+            <div class="investment-name">${escapeHtml(i.name)}</div>
+            <div class="investment-meta">
+              <span class="tag">${escapeHtml(provider)}</span>
+              <span>${Number(i.rate).toFixed(2)}% p.a. (Daily Interest)</span>
+              <span>Started: ${i.startDate}</span>
+            </div>
+          </div>
+          <div class="investment-amount">${fmt(calc.balance)}</div>
+        </div>
+        <div class="projection-grid">
+          <div class="projection-item"><span class="small">Current Value</span><strong>${fmt(calc.totalValue)}</strong></div>
+          <div class="projection-item"><span class="small">Net Interest</span><strong>${fmt(calc.netInterest)}</strong></div>
+          ${isEtica ? `
+            <div class="projection-item"><span class="small">Gross Interest</span><strong>${fmt(calc.grossInterest)}</strong></div>
+            <div class="projection-item"><span class="small">Fees (15% Tax + 2% Fee)</span><strong>-${fmt(calc.withholdingTax + calc.mgmtFee)}</strong></div>
+          ` : ''}
+        </div>
+        <div class="tx-box">
+          <div class="tx-box-title">Add Deposit / Withdrawal</div>
+          <form class="tx-form" data-inv-id="${i.id}">
+            <select name="type">
+              <option value="deposit">Deposit</option>
+              <option value="withdraw">Withdraw</option>
+            </select>
+            <input type="number" name="amount" placeholder="Amount" step="0.01" required style="width:90px;">
+            <input type="date" name="date" value="${today.toISOString().slice(0,10)}" required>
+            <button type="submit">Log</button>
+          </form>
+          ${txHistory ? `<div class="tx-history">${txHistory}</div>` : ''}
+        </div>
+        <div class="investment-actions">
+          <button class="icon-btn edit-inv-btn" data-inv-id="${i.id}">Edit</button>
+          <button class="icon-btn" data-inv-id="${i.id}" data-action="delete-investment">Delete</button>
+        </div>
+      `;
+      invEls.list.appendChild(item);
+    });
+
+    renderDailyAccrualTable();
+  }
+
+  function enterInvEditMode(inv){
+    editingInvId = inv.id;
+    invEls.name.value = inv.name;
+    invEls.amount.value = inv.amount;
+    invEls.rate.value = inv.rate;
+    invEls.startDate.value = inv.startDate || today.toISOString().slice(0,10);
+    invEls.provider.value = inv.provider;
+    if(inv.provider === 'Other'){
+      invEls.otherProviderField.style.display = 'flex';
+      invEls.otherProvider.value = inv.otherProvider || '';
+    } else {
+      invEls.otherProviderField.style.display = 'none';
+    }
+    invEls.goal.value = inv.goal || '';
+
+    invEls.title.textContent = 'Edit investment';
+    invEls.submitBtn.textContent = 'Save changes';
+    invEls.cancelBtn.hidden = false;
+    invEls.banner.hidden = false;
+    invEls.form.classList.add('editing');
+    invEls.form.scrollIntoView({behavior:'smooth', block:'start'});
+  }
+
+  function exitInvEditMode(){
+    editingInvId = null;
+    invEls.form.reset();
+    invEls.startDate.value = today.toISOString().slice(0,10);
+    invEls.title.textContent = 'Add savings / investment';
+    invEls.submitBtn.textContent = 'Add investment';
+    invEls.cancelBtn.hidden = true;
+    invEls.banner.hidden = true;
+    invEls.otherProviderField.style.display = 'none';
+    invEls.form.classList.remove('editing');
+  }
+
+  document.querySelectorAll('.nav-tab').forEach(tab=>{
+    tab.addEventListener('click', ()=>{
+      document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
+      document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById(tab.dataset.page).classList.add('active');
+      if(tab.dataset.page === 'savingsPage') renderInvestments();
+    });
+  });
+
+  invEls.provider.addEventListener('change', ()=>{
+    invEls.otherProviderField.style.display = invEls.provider.value === 'Other' ? 'flex' : 'none';
+  });
+
+  invEls.accrualSelectInv.addEventListener('change', renderDailyAccrualTable);
+
+  invEls.form.addEventListener('submit', ev=>{
+    ev.preventDefault();
+    const amount = parseFloat(invEls.amount.value);
+    const rate = parseFloat(invEls.rate.value);
+    if(!invEls.name.value.trim() || !isFinite(amount) || amount < 0 || !isFinite(rate) || rate < 0) return;
+
+    if(editingInvId !== null){
+      const idx = investments.findIndex(i=>i.id === editingInvId);
+      if(idx !== -1){
+        investments[idx] = {
+          ...investments[idx],
+          name: invEls.name.value.trim(),
+          amount,
+          rate,
+          startDate: invEls.startDate.value,
+          provider: invEls.provider.value,
+          otherProvider: invEls.otherProvider.value.trim(),
+          goal: parseFloat(invEls.goal.value) || 0
+        };
+      }
+      saveInvestments();
+      exitInvEditMode();
+      renderInvestments();
+      return;
+    }
+
+    investments.push({
+      id: Date.now(),
+      name: invEls.name.value.trim(),
+      amount,
+      rate,
+      startDate: invEls.startDate.value,
+      provider: invEls.provider.value,
+      otherProvider: invEls.otherProvider.value.trim(),
+      goal: parseFloat(invEls.goal.value) || 0,
+      transactions: []
+    });
+    saveInvestments();
+    exitInvEditMode();
+    renderInvestments();
+  });
+
+  invEls.cancelBtn.addEventListener('click', exitInvEditMode);
+
+  invEls.list.addEventListener('click', ev=>{
+    const delBtn = ev.target.closest('[data-action="delete-investment"]');
+    if(delBtn){
+      const id = Number(delBtn.dataset.invId);
+      investments = investments.filter(i=>i.id !== id);
+      saveInvestments();
+      renderInvestments();
+      return;
+    }
+
+    const editBtn = ev.target.closest('.edit-inv-btn');
+    if(editBtn){
+      const id = Number(editBtn.dataset.invId);
+      const inv = investments.find(i=>i.id === id);
+      if(inv) enterInvEditMode(inv);
+    }
+  });
+
+  invEls.list.addEventListener('submit', ev=>{
+    if(ev.target.classList.contains('tx-form')){
+      ev.preventDefault();
+      const form = ev.target;
+      const invId = Number(form.dataset.invId);
+      const type = form.type.value;
+      const amount = parseFloat(form.amount.value);
+      const date = form.date.value;
+
+      if(!isFinite(amount) || amount <= 0) return;
+
+      const inv = investments.find(i=>i.id === invId);
+      if(inv){
+        if(!inv.transactions) inv.transactions = [];
+        inv.transactions.push({ id: Date.now(), type, amount, date });
+        saveInvestments();
+        renderInvestments();
+      }
+    }
+  });
+
+  invEls.exportExcelBtn.addEventListener('click', ()=>{
+    if(investments.length === 0){
+      alert('No investments to export.');
+      return;
+    }
+
+    const data = investments.map(i => {
+      const calc = calcInvestmentDailyInterest(i);
+      return {
+        "Name": i.name,
+        "Provider": i.provider === 'Other' ? i.otherProvider : i.provider,
+        "Interest Rate (% p.a.)": i.rate,
+        "Start Date": i.startDate,
+        "Current Balance": calc.balance,
+        "Gross Accrued Interest": calc.grossInterest,
+        "Withholding Tax (15%)": calc.withholdingTax,
+        "Management Fee (2%)": calc.mgmtFee,
+        "Net Interest Earned": calc.netInterest,
+        "Total Net Value": calc.totalValue,
+        "Target Goal": i.goal || 'N/A'
+      };
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Investments");
+
+    XLSX.writeFile(workbook, "Savings_and_Investments.xlsx");
+  });
+
+  renderInvestments();
+  render();
+})();
+</script>
+</body>
+</html>
